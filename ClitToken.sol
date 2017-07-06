@@ -226,12 +226,14 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 				state = State.Successful;
 				payOut();
 				
-				removeContract();
 				HardCapReached(fundRecipient, totalRaised);
+				
+				// Contract can be immediately closed out
+				removeContract();
 
 			} else  {
 				state = State.ExpiredRefund; // backers can now collect refunds by calling getRefund()
-				removeContract();
+				
 				RefundPeriodStarted();
 			}
 		} else if (currentBalance > fundingGoal && fundingGoalReached == false) {
