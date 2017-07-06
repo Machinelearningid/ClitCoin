@@ -62,8 +62,10 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 	// State variables
     State public state = State.Fundraising; // initialize on create	
     uint public fundingGoal; 
+	uint public totalRaised;
 	uint public currentBalance;
-	uint public tokensIssued;
+	uint public issuedTokenBalance;
+	uint public totalTokensIssued;
 	uint public capTokenAmount;
 	uint public startBlockNumber;
 	uint public endBlockNumber;
@@ -78,12 +80,14 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 	uint public secondTokenExchangeRate;
 	uint public thirdTokenExchangeRate;
 	uint public fourthTokenExchangeRate;
-
-	uint public finalTokenExchangeRate;
+	uint public finalTokenExchangeRate;	
+	
+	bool public fundingGoalReached;
 	
     ClitCoinToken public exchangeToken;
 	
 	/* This generates a public event on the blockchain that will notify clients */
+	event HardCapReached(address fundRecipient, uint amountRaised);
 	event GoalReached(address fundRecipient, uint amountRaised);
 	event FundTransfer(address backer, uint amount, bool isContribution);	
 	event FrozenFunds(address target, bool frozen);
@@ -112,7 +116,7 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 	
 	// Add one week to endBlockNumber
 	modifier atEndOfLifecycle() {
-        if(!((state == State.ExpiredRefund || state == State.Successful) && block.number > eolBlockNumber)) {
+        if(!((state == State.ExpiredRefund && block.number > eolBlockNumber) || state == State.Successful)) {
             throw;
         }
         _;
@@ -146,19 +150,21 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 		fundingGoal = 7000 * 1 ether;
 		capTokenAmount = 140 * 10 ** 6;
 		state = State.Fundraising;
+		fundingGoalReached = false;
 		
-		//deadline = now + _durationInMinutes * 1 minutes;
+		totalRaised = 0;
 		currentBalance = 0;
-		tokensIssued = 0;
+		totalTokensIssued = 0;
+		issuedTokenBalance = 0;
 		
-		startBlockNumber = block.number + div(mul(3600, _delayStartHours), 14);
-		endBlockNumber = startBlockNumber + div(mul(3600, 1080), 14); // 45 days 
-		eolBlockNumber = endBlockNumber + div(mul(3600, 168), 14);  // one week - contract end of life
+		startBlockNumber = block.number + div(mul(3600, _delayStartHours), 17);
+		endBlockNumber = startBlockNumber + div(mul(3600, 1080), 17); // 45 days 
+		eolBlockNumber = endBlockNumber + div(mul(3600, 168), 17);  // one week - contract end of life
 
-		firstExchangeRatePeriod = startBlockNumber + div(mul(3600, 24), 14);   // First 24 hour sale 
-		secondExchangeRatePeriod = firstExchangeRatePeriod + div(mul(3600, 240), 14); // Next 10 days
-		thirdExchangeRatePeriod = secondExchangeRatePeriod + div(mul(3600, 240), 14); // Next 10 days
-		fourthExchangeRatePeriod = thirdExchangeRatePeriod + div(mul(3600, 240), 14); // Next 10 days
+		firstExchangeRatePeriod = startBlockNumber + div(mul(3600, 24), 17);   // First 24 hour sale 
+		secondExchangeRatePeriod = firstExchangeRatePeriod + div(mul(3600, 240), 17); // Next 10 days
+		thirdExchangeRatePeriod = secondExchangeRatePeriod + div(mul(3600, 240), 17); // Next 10 days
+		fourthExchangeRatePeriod = thirdExchangeRatePeriod + div(mul(3600, 240), 17); // Next 10 days
 		
 		uint _tokenExchangeRate = 1000;
 		firstTokenExchangeRate = (_tokenExchangeRate + 1000);	
@@ -197,48 +203,63 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 		if (amount == 0) throw;
 		
 		balanceOf[msg.sender] += amount;	
+		
+		totalRaised += amount;
 		currentBalance += amount;
 						
 		uint tokenAmount = getCurrentExchangeRate(amount);
 		exchangeToken.generateTokens(msg.sender, tokenAmount);
-		tokensIssued += tokenAmount;
+		totalTokensIssued += tokenAmount;
+		issuedTokenBalance += tokenAmount;
 		
 		FundTransfer(msg.sender, amount, true); 
-		LogFundingReceived(msg.sender, tokenAmount, tokensIssued);
 		
 		checkIfFundingCompleteOrExpired();
 		
 		return balanceOf[msg.sender];
 	}
 
-	
 	function checkIfFundingCompleteOrExpired() {
-		if ( block.number > endBlockNumber || tokensIssued >= capTokenAmount ) {
-			if (currentBalance > fundingGoal) {
+		if (block.number > endBlockNumber || totalTokensIssued >= capTokenAmount ) {
+			// Hard limit reached
+			if (currentBalance > fundingGoal || fundingGoalReached == true) {
 				state = State.Successful;
 				payOut();
 				
-				GoalReached(fundRecipient, currentBalance);
+				removeContract();
+				HardCapReached(fundRecipient, totalRaised);
 
 			} else  {
 				state = State.ExpiredRefund; // backers can now collect refunds by calling getRefund()
+				removeContract();
 			}
+		} else if (currentBalance > fundingGoal && fundingGoalReached == false) {
+			// Once goal reached
+			fundingGoalReached = true;
+			
+			state = State.Successful;
+			payOut();
+			
+			// Continue allowing users to buy in
+			state = State.Fundraising;
+			
+			// currentBalance is zero after pay out
+			GoalReached(fundRecipient, totalRaised);
 		}
 	}
 
 	function payOut() public inState(State.Successful) {
-
+		// Ethereum balance
 		var amount = currentBalance;
 		currentBalance = 0;
-		state = State.Closed;
 
 		fundRecipient.transfer(amount);
 		
 		// Update the token reserve amount so that 50% of tokens remain in reserve
-		exchangeToken.generateTokens(fundRecipient, tokensIssued);				
-
-		// Transfer ownership back to our creator
-		exchangeToken.changeController(controller);
+		var tokenCount = issuedTokenBalance;
+		issuedTokenBalance = 0;
+		
+		exchangeToken.generateTokens(fundRecipient, tokenCount);		
 	}
 
 	function getRefund() public inState(State.ExpiredRefund) {	
@@ -252,15 +273,20 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 		FundTransfer(msg.sender, amountToRefund, false);
 	}
 	
-	function removeContract() public atEndOfLifecycle onlyController() {		
-		if (state != State.Closed) {
-			exchangeToken.changeController(controller);
-		}
+	function removeContract() public atEndOfLifecycle {		
+		state = State.Closed;
+		
+		// Allow clit owners to freely trade coins on the open market
+		exchangeToken.enableTransfers(true);
+		
+		// Restore ownership to controller
+		exchangeToken.changeController(controller);
+
 		selfdestruct(msg.sender);
 	}
 	
 	/* The function without name is the default function that is called whenever anyone sends funds to a contract */
-	function () inState(State.Fundraising) accountNotFrozen payable { 
+	function () payable { 
 		investment(); 
 	}	
 
