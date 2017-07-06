@@ -109,20 +109,20 @@ contract ClitCrowdFunder is Controlled, SafeMath {
      *  Modifiers
      */
 
-	modifier inState(State _state) {
+   modifier inState(State _state) {
         if (state != _state) throw;
         _;
     }
 	
-	// Add one week to endBlockNumber
-	modifier atEndOfLifecycle() {
+    // Add one week to endBlockNumber
+    modifier atEndOfLifecycle() {
         if(!((state == State.ExpiredRefund && block.number > eolBlockNumber) || state == State.Successful)) {
             throw;
         }
         _;
     }
 	
-	modifier accountNotFrozen() {
+    modifier accountNotFrozen() {
         if (frozenAccount[msg.sender] == true) throw;
         _;
     }
@@ -157,14 +157,14 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 		totalTokensIssued = 0;
 		issuedTokenBalance = 0;
 		
-		startBlockNumber = block.number + div(mul(3600, _delayStartHours), 17);
-		endBlockNumber = startBlockNumber + div(mul(3600, 1080), 17); // 45 days 
-		eolBlockNumber = endBlockNumber + div(mul(3600, 168), 17);  // one week - contract end of life
+		startBlockNumber = block.number + div(mul(3600, _delayStartHours), 14);
+		endBlockNumber = startBlockNumber + div(mul(3600, 1080), 14); // 45 days 
+		eolBlockNumber = endBlockNumber + div(mul(3600, 168), 14);  // one week - contract end of life
 
-		firstExchangeRatePeriod = startBlockNumber + div(mul(3600, 24), 17);   // First 24 hour sale 
-		secondExchangeRatePeriod = firstExchangeRatePeriod + div(mul(3600, 240), 17); // Next 10 days
-		thirdExchangeRatePeriod = secondExchangeRatePeriod + div(mul(3600, 240), 17); // Next 10 days
-		fourthExchangeRatePeriod = thirdExchangeRatePeriod + div(mul(3600, 240), 17); // Next 10 days
+		firstExchangeRatePeriod = startBlockNumber + div(mul(3600, 24), 14);   // First 24 hour sale 
+		secondExchangeRatePeriod = firstExchangeRatePeriod + div(mul(3600, 240), 14); // Next 10 days
+		thirdExchangeRatePeriod = secondExchangeRatePeriod + div(mul(3600, 240), 14); // Next 10 days
+		fourthExchangeRatePeriod = thirdExchangeRatePeriod + div(mul(3600, 240), 14); // Next 10 days
 		
 		uint _tokenExchangeRate = 1000;
 		firstTokenExchangeRate = (_tokenExchangeRate + 1000);	
