@@ -7,7 +7,7 @@ pragma solidity ^0.4.11;
 contract ClitCoinToken is MiniMeToken {
 
 
-	function ClitToken(
+	function ClitCoinToken(
 		//address _tokenFactory
 	) MiniMeToken(
 		0x0,
@@ -54,7 +54,7 @@ contract SafeMath {
 }
 
 
-contract CrowdFunder is Controlled, SafeMath {
+contract ClitCrowdFunder is Controlled, SafeMath {
 
 	address public creator;
     address public fundRecipient;
@@ -81,7 +81,7 @@ contract CrowdFunder is Controlled, SafeMath {
 
 	uint public finalTokenExchangeRate;
 	
-    ClitToken public exchangeToken;
+    ClitCoinToken public exchangeToken;
 	
 	/* This generates a public event on the blockchain that will notify clients */
 	event GoalReached(address fundRecipient, uint amountRaised);
@@ -128,11 +128,17 @@ contract CrowdFunder is Controlled, SafeMath {
       require(msg.value >= 10 ** 16);
       _;
     }
+	
+	modifier isStarted() {
+		require(block.number >= startBlockNumber);
+		_;
+	}
 
 	/*  at initialization, setup the owner */
-	function CrowdFunder(
+	function ClitCrowdFunder(
 		address _fundRecipient,
-		ClitToken _addressOfExchangeToken
+		uint _delayStartHours,
+		ClitCoinToken _addressOfExchangeToken
 	) {
 		creator = msg.sender;
 		
@@ -145,7 +151,7 @@ contract CrowdFunder is Controlled, SafeMath {
 		currentBalance = 0;
 		tokensIssued = 0;
 		
-		startBlockNumber = block.number;
+		startBlockNumber = block.number + div(mul(3600, _delayStartHours), 14);
 		endBlockNumber = startBlockNumber + div(mul(3600, 1080), 14); // 45 days 
 		eolBlockNumber = endBlockNumber + div(mul(3600, 168), 14);  // one week - contract end of life
 
@@ -161,7 +167,7 @@ contract CrowdFunder is Controlled, SafeMath {
 		fourthTokenExchangeRate = (_tokenExchangeRate + 100);
 		finalTokenExchangeRate = _tokenExchangeRate;
 		
-		exchangeToken = ClitToken(_addressOfExchangeToken);
+		exchangeToken = ClitCoinToken(_addressOfExchangeToken);
 	}
 	
 	function freezeAccount(address target, bool freeze) onlyController {
@@ -178,14 +184,14 @@ contract CrowdFunder is Controlled, SafeMath {
 			return thirdTokenExchangeRate * amount / 1 ether;
 		} else if (block.number <= fourthExchangeRatePeriod) {
 			return fourthTokenExchangeRate * amount / 1 ether;
-		} else if (block.number <= finalExchangeRatePeriod) {
+		} else if (block.number <= endBlockNumber) {
 			return finalTokenExchangeRate * amount / 1 ether;
 		}
 		
 		return finalTokenExchangeRate * amount / 1 ether;
 	}
 
-	function investment() public inState(State.Fundraising) accountNotFrozen minInvestment payable returns(uint)  {
+	function investment() public inState(State.Fundraising) isStarted accountNotFrozen minInvestment payable returns(uint)  {
 		
 		uint amount = msg.value;
 		if (amount == 0) throw;
