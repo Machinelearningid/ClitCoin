@@ -16,7 +16,7 @@ contract ClitCoinToken is MiniMeToken {
 		"CLIT Token", 	// Token name
 		0,              // Decimals
 		"CLIT",         // Symbol
-		true            // Enable transfers
+		false            // Enable transfers
 	) {
 		version = "CLIT 1.0";
 	}
@@ -91,7 +91,7 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 	event GoalReached(address fundRecipient, uint amountRaised);
 	event FundTransfer(address backer, uint amount, bool isContribution);	
 	event FrozenFunds(address target, bool frozen);
-	event LogFundingReceived(address addr, uint amount, uint currentTotal);
+	event RefundPeriodStarted();
 
 	/* data structure to hold information about campaign contributors */
 	mapping(address => uint256) private balanceOf;
@@ -232,6 +232,7 @@ contract ClitCrowdFunder is Controlled, SafeMath {
 			} else  {
 				state = State.ExpiredRefund; // backers can now collect refunds by calling getRefund()
 				removeContract();
+				RefundPeriodStarted();
 			}
 		} else if (currentBalance > fundingGoal && fundingGoalReached == false) {
 			// Once goal reached
